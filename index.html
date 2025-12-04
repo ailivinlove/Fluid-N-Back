@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Fluid N-Back</title>
+    <style>
+        :root {
+            --primary: #111827; /* Dark Slate */
+            --accent: #3b82f6;  /* Vivid Blue */
+            --bg: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-sub: #6b7280;
+            --success: #10b981;
+            --error: #ef4444;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+            overflow: hidden; /* Prevent scrolling during play */
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 480px;
+            background: var(--card-bg);
+            border-radius: 24px;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.1);
+            padding: 2.5rem;
+            position: relative;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* Typography */
+        h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 0.5rem 0; text-align: center; }
+        h2 { font-size: 0.9rem; font-weight: 500; color: var(--text-sub); margin: 0 0 2rem 0; text-align: center; letter-spacing: 0.05em; text-transform: uppercase; }
+
+        /* UI Views */
+        .view { display: none; opacity: 0; transition: opacity 0.3s ease; height: 100%; width: 100%; }
+        .view.active { display: flex; opacity: 1; flex-direction: column; }
+
+        /* Controls */
+        .control-group { margin-bottom: 2rem; }
+        .control-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 0.75rem; }
+        .control-label { font-weight: 600; font-size: 0.95rem; }
+        .control-value { font-family: 'SF Mono', 'Roboto Mono', monospace; color: var(--accent); font-weight: 700; }
+
+        /* Inputs */
+        input[type="range"] {
+            width: 100%; height: 6px; background: #e5e7eb; border-radius: 3px; appearance: none; outline: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            appearance: none; width: 20px; height: 20px; background: var(--primary); border-radius: 50%; cursor: pointer; transition: transform 0.1s;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        
+        /* Number Input specific styling */
+        .number-input-wrapper { display: flex; align-items: center; border: 2px solid #e5e7eb; border-radius: 12px; overflow: hidden; }
+        input[type="number"] {
+            width: 100%; border: none; padding: 12px; font-size: 1rem; font-weight: 600; text-align: center; color: var(--primary); outline: none;
+        }
+        /* Remove spinners */
+        input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+        /* Buttons */
+        .btn {
+            width: 100%; padding: 1.25rem; border: none; border-radius: 16px;
+            font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn-primary:active { transform: scale(0.98); background: black; }
+        .btn-secondary { background: #f3f4f6; color: var(--primary); margin-top: 1rem; }
+        
+        /* Game Visuals */
+        .visualizer {
+            flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;
+        }
+        
+        .pulse-ring {
+            width: 80px; height: 80px; border-radius: 50%;
+            background: var(--accent);
+            opacity: 0; transform: scale(0.8);
+            transition: all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .pulse-ring.active { opacity: 1; transform: scale(1.5); }
+
+        .game-status {
+            position: absolute; top: 0; width: 100%; text-align: center;
+            font-size: 0.85rem; color: var(--text-sub); font-family: monospace;
+        }
+
+        .feedback-display {
+            height: 2rem; margin-top: 1rem; font-weight: 800; font-size: 1.25rem; letter-spacing: 0.05em;
+            opacity: 0; transform: translateY(10px); transition: all 0.2s;
+        }
+        .feedback-display.visible { opacity: 1; transform: translateY(0); }
+        .feedback-display.match { color: var(--success); }
+        .feedback-display.miss { color: var(--error); }
+
+        /* Interaction Area */
+        .interaction-zone { margin-top: auto; }
+        .match-btn {
+            height: 80px; background: white; border: 2px solid #e5e7eb; color: var(--text-sub);
+            font-size: 1.2rem;
+        }
+        .match-btn.active { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+        .match-btn:active { transform: scale(0.98); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+        .stat-card { background: #f9fafb; padding: 1.5rem; border-radius: 16px; text-align: center; }
+        .stat-val { font-size: 2rem; font-weight: 800; display: block; margin-bottom: 0.25rem; }
+        .stat-label { font-size: 0.75rem; color: var(--text-sub); font-weight: 600; text-transform: uppercase; }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    
+    <!-- SETUP VIEW -->
+    <div id="view-setup" class="view active">
+        <h1>Fluid N-Back</h1>
+        <h2>Auditory Intelligence Trainer</h2>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">N-Level (Difficulty)</span>
+                <span class="control-value" id="disp-n">2</span>
+            </div>
+            <input type="range" id="input-n" min="1" max="5" value="2" oninput="updateVal('n', this.value)">
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Total Trials</span>
+                <!-- No display span needed, the input shows the number -->
+            </div>
+            <div class="number-input-wrapper">
+                <input type="number" id="input-trials" min="10" max="5000" value="20">
+            </div>
+        </div>
+
+        <div class="control-group">
+            <div class="control-header">
+                <span class="control-label">Speed</span>
+                <span class="control-value" id="disp-speed">2.5s</span>
+            </div>
+            <input type="range" id="input-speed" min="1500" max="4000" step="100" value="2500" oninput="updateVal('speed', this.value)">
+        </div>
+
+        <div style="margin-top: auto;">
+            <button class="btn btn-primary" onclick="App.initSession()">
+                Start Session
+            </button>
+        </div>
+    </div>
+
+    <!-- GAME VIEW -->
+    <div id="view-game" class="view">
+        <div class="game-status">TRIAL <span id="trial-current">0</span> / <span id="trial-total">0</span></div>
+        
+        <div class="visualizer">
+            <div class="feedback-display" id="feedback">MATCH!</div>
+            <div class="pulse-ring" id="pulse"></div>
+        </div>
+
+        <div class="interaction-zone">
+            <button class="btn match-btn" id="btn-match" onmousedown="App.handleInput()" ontouchstart="App.handleInput(event)">
+                Match (Spacebar)
+            </button>
+        </div>
+    </div>
+
+    <!-- RESULTS VIEW -->
+    <div id="view-results" class="view">
+        <h1>Session Complete</h1>
+        <h2>Performance Report</h2>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-val" id="res-accuracy">0%</span>
+                <span class="stat-label">Accuracy</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-val" id="res-targets">0/0</span>
+                <span class="stat-label">Targets Found</span>
+            </div>
+            <div class="stat-card">
+                <span class="stat-val" id="res-lures">0</span>
+                <span class="stat-label">Lure Errors</span>
+            </div>
+             <div class="stat-card">
+                <span class="stat-val" id="res-n">2</span>
+                <span class="stat-label">N-Level</span>
+            </div>
+        </div>
+
+        <button class="btn btn-primary" onclick="App.reset()">New Session</button>
+    </div>
+
+</div>
+
+<script>
+/**
+ * Fluid N-Back Engine
+ * Focuses on constraint satisfaction to force fluid intelligence usage.
+ */
+
+const App = (function() {
+    
+    // Configuration & State
+    const POOL = ['H', 'K', 'L', 'M', 'R', 'S', 'T', 'W']; // High distinctiveness
+    
+    let config = {
+        n: 2,
+        trials: 20,
+        speed: 2500
+    };
+
+    let session = {
+        sequence: [],    // Array of letters
+        types: [],       // 'target', 'lure', 'noise', 'buffer'
+        index: -1,       // Current trial index
+        responses: [],   // User inputs
+        timer: null,
+        voices: []
+    };
+
+    // DOM Elements
+    const els = {
+        views: { setup: document.getElementById('view-setup'), game: document.getElementById('view-game'), results: document.getElementById('view-results') },
+        inputs: { n: document.getElementById('input-n'), trials: document.getElementById('input-trials'), speed: document.getElementById('input-speed') },
+        displays: { n: document.getElementById('disp-n'), speed: document.getElementById('disp-speed'), current: document.getElementById('trial-current'), total: document.getElementById('trial-total') },
+        game: { pulse: document.getElementById('pulse'), feedback: document.getElementById('feedback'), matchBtn: document.getElementById('btn-match') },
+        results: { acc: document.getElementById('res-accuracy'), targets: document.getElementById('res-targets'), lures: document.getElementById('res-lures'), n: document.getElementById('res-n') }
+    };
+
+    // --- Audio Engine (Bulletproof) ---
+    const synth = window.speechSynthesis;
+
+    function initAudioEngine() {
+        // 1. Silent injection to unlock browser audio context
+        if (synth.speaking) synth.cancel();
+        const u = new SpeechSynthesisUtterance("");
+        u.volume = 0; 
+        synth.speak(u);
+
+        // 2. Load voices priority logic
+        let allVoices = synth.getVoices();
+        // Priority: Google US -> Apple US -> Default
+        session.voices = allVoices.sort((a, b) => {
+            const aScore = (a.lang === 'en-US' ? 2 : 0) + (a.name.includes('Google') ? 1 : 0);
+            const bScore = (b.lang === 'en-US' ? 2 : 0) + (b.name.includes('Google') ? 1 : 0);
+            return bScore - aScore;
+        });
+    }
+
+    function speak(char) {
+        if (synth.speaking) synth.cancel(); // Critical: prevent queue lag
+
+        const u = new SpeechSynthesisUtterance(char);
+        u.voice = session.voices[0] || null;
+        u.rate = 1.1;  // Crisp speed
+        u.pitch = 1.0;
+        u.volume = 1.0;
+
+        // Visual Synchronization
+        u.onstart = () => {
+            els.game.pulse.classList.add('active');
+        };
+        u.onend = () => {
+            els.game.pulse.classList.remove('active');
+        };
+        // Failsafe for browsers where onend might hang
+        setTimeout(() => els.game.pulse.classList.remove('active'), 800);
+
+        synth.speak(u);
+    }
+
+    // --- Sophisticated Sequence Algorithm ---
+    function generateSequence() {
+        const n = config.n;
+        const len = config.trials;
+        const seq = new Array(len).fill(null);
+        const types = new Array(len).fill(null);
+
+        // 1. Define Distribution Rules (The Intelligence Stressors)
+        // We calculate counts for the *active* portion (after buffer)
+        const activeCount = len - n;
+        const targetCount = Math.round(activeCount * 0.33); // 33% Targets
+        const lureCount = Math.round(activeCount * 0.15);   // 15% Lures (Interference)
+        const noiseCount = activeCount - targetCount - lureCount;
+
+        // 2. Create and Shuffle the "Deck" of trial types
+        let deck = [
+            ...Array(targetCount).fill('target'),
+            ...Array(lureCount).fill('lure'),
+            ...Array(noiseCount).fill('noise')
+        ];
+        
+        // Fisher-Yates Shuffle
+        for (let i = deck.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [deck[i], deck[j]] = [deck[j], deck[i]];
+        }
+
+        // 3. Fill Buffer (First N) - Pure Noise, no matches allowed
+        for (let i = 0; i < n; i++) {
+            let char;
+            do {
+                char = POOL[Math.floor(Math.random() * POOL.length)];
+            } while (i > 0 && char === seq[i-1]); // No immediate repeats in buffer
+            seq[i] = char;
+            types[i] = 'buffer';
+        }
+
+        // 4. Fill Active Sequence (Constraint Satisfaction)
+        for (let i = 0; i < deck.length; i++) {
+            const index = n + i;
+            const type = deck[i];
+            const targetChar = seq[index - n]; // The N-back letter
+            let char = null;
+
+            if (type === 'target') {
+                // Constraint: Must match N-back
+                char = targetChar;
+            } 
+            else if (type === 'lure') {
+                // Constraint: Must be Familiar (N-1 or N+1 logic) but NOT Correct Position
+                // We try to grab the letter from N-1 (1-back)
+                const lureSource = seq[index - 1]; 
+                
+                // Critical Check: If the lure source IS the target, we can't use it 
+                // (otherwise it becomes a target trial). Fallback to noise.
+                if (lureSource !== targetChar) {
+                    char = lureSource;
+                } else {
+                    // Fallback: Pick random char that isn't target
+                    char = getRandomCharExcluding(targetChar);
+                }
+            } 
+            else { // Noise
+                // Constraint: Must NOT match N-back. 
+                // Heuristic: Also try to avoid N-1 to prevent accidental lures in noise slots.
+                char = getRandomCharExcluding(targetChar);
+            }
+
+            seq[index] = char;
+            types[index] = type;
+        }
+
+        session.sequence = seq;
+        session.types = types;
+    }
+
+    function getRandomCharExcluding(exclude) {
+        const valid = POOL.filter(c => c !== exclude);
+        return valid[Math.floor(Math.random() * valid.length)];
+    }
+
+    // --- Game Logic ---
+    function nextTrial() {
+        session.index++;
+
+        // End Check
+        if (session.index >= config.trials) {
+            finishSession();
+            return;
+        }
+
+        // UI Updates
+        els.displays.current.innerText = session.index + 1;
+        els.game.feedback.classList.remove('visible');
+        els.game.matchBtn.classList.remove('active');
+
+        // Execute Audio
+        const char = session.sequence[session.index];
+        speak(char);
+
+        // Timer
+        session.timer = setTimeout(nextTrial, config.speed);
+    }
+
+    function handleInput(e) {
+        if(e) e.preventDefault(); // Touch fix
+
+        // Validation: Can't answer during buffer or if already answered
+        if (session.index < config.n) return;
+        if (session.responses[session.index]) return;
+
+        // Determine Reality
+        const current = session.sequence[session.index];
+        const nBack = session.sequence[session.index - config.n];
+        const isMatch = current === nBack;
+
+        // Record
+        session.responses[session.index] = isMatch ? 'hit' : 'falseAlarm';
+
+        // Feedback
+        els.game.feedback.innerText = isMatch ? "MATCH!" : "ERROR";
+        els.game.feedback.className = `feedback-display visible ${isMatch ? 'match' : 'miss'}`;
+        els.game.matchBtn.classList.add('active');
+    }
+
+    function finishSession() {
+        switchView('results');
+
+        let hits = 0;
+        let targets = 0;
+        let luresPresented = 0;
+        let lureErrors = 0;
+        let totalDecisions = 0;
+        let correctDecisions = 0;
+
+        // Iterate active trials (skip buffer)
+        for (let i = config.n; i < config.trials; i++) {
+            const type = session.types[i];
+            const resp = session.responses[i]; // 'hit', 'falseAlarm', or undefined (miss/correctRejection)
+            
+            // Logic for Accuracy Calculation
+            if (type === 'target') {
+                targets++;
+                if (resp === 'hit') { hits++; correctDecisions++; }
+                // else miss
+            } else {
+                // Non-target (Lure or Noise)
+                if (resp !== 'falseAlarm') correctDecisions++; // Correct Rejection
+                
+                if (type === 'lure') {
+                    luresPresented++;
+                    if (resp === 'falseAlarm') lureErrors++;
+                }
+            }
+            totalDecisions++;
+        }
+
+        const accuracy = Math.round((correctDecisions / totalDecisions) * 100);
+
+        // Render Stats
+        els.results.acc.innerText = accuracy + "%";
+        els.results.targets.innerText = `${hits}/${targets}`;
+        els.results.lures.innerText = lureErrors; // Raw count of errors on lure trials
+        els.results.n.innerText = config.n;
+    }
+
+    // --- Wiring & Utils ---
+    function switchView(name) {
+        Object.values(els.views).forEach(el => el.classList.remove('active'));
+        els.views[name].classList.add('active');
+    }
+
+    // Keyboard Bind
+    document.addEventListener('keydown', e => {
+        if (e.code === 'Space' && els.views.game.classList.contains('active')) {
+            handleInput();
+        }
+    });
+
+    // Public API
+    return {
+        initSession: () => {
+            // Read Inputs
+            config.n = parseInt(els.inputs.n.value);
+            config.trials = parseInt(els.inputs.trials.value);
+            config.speed = parseInt(els.inputs.speed.value);
+
+            // Initialize Audio Context immediately on click
+            initAudioEngine();
+
+            // Prepare Data
+            generateSequence();
+            session.index = -1;
+            session.responses = new Array(config.trials).fill(null);
+            els.displays.total.innerText = config.trials;
+
+            // Start
+            switchView('game');
+            setTimeout(nextTrial, 1000); // Warmup pause
+        },
+        handleInput: handleInput,
+        reset: () => {
+            if(session.timer) clearTimeout(session.timer);
+            if(synth.speaking) synth.cancel();
+            switchView('setup');
+        }
+    };
+
+})();
+
+// Global scope helpers for HTML event attributes
+window.updateVal = (key, val) => {
+    if(key === 'n') document.getElementById('disp-n').innerText = val;
+    if(key === 'speed') document.getElementById('disp-speed').innerText = (val/1000).toFixed(1) + 's';
+};
+
+</script>
+</body>
+</html>
