@@ -1,1 +1,559 @@
-...
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auditory N-Back</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #0f0f1a 100%);
+            min-height: 100vh;
+            color: #e8e8e8;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { width: 100%; max-width: 500px; padding: 20px; }
+        h1 { text-align: center; font-size: 1.6rem; margin-bottom: 8px; color: #00d9ff; }
+        .subtitle { text-align: center; color: #555; margin-bottom: 30px; font-size: 0.85rem; }
+        .settings { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; margin-bottom: 30px; }
+        .setting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .setting label { font-size: 0.75rem; color: #666; text-transform: uppercase; }
+        select {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            color: #fff; padding: 10px 15px; border-radius: 8px; font-size: 1rem; min-width: 90px;
+        }
+        .toggle-container { display: flex; align-items: center; gap: 10px; }
+        .toggle {
+            width: 50px; height: 26px; background: rgba(255,255,255,0.1);
+            border-radius: 13px; position: relative; cursor: pointer;
+            transition: background 0.3s;
+        }
+        .toggle.active { background: #00ff88; }
+        .toggle::after {
+            content: ''; position: absolute; width: 22px; height: 22px;
+            background: #fff; border-radius: 50%; top: 2px; left: 2px;
+            transition: transform 0.3s;
+        }
+        .toggle.active::after { transform: translateX(24px); }
+        .display { text-align: center; margin-bottom: 30px; }
+        .letter {
+            font-size: 8rem; font-weight: 200; height: 180px;
+            display: flex; align-items: center; justify-content: center;
+            color: #00d9ff; text-shadow: 0 0 30px rgba(0,217,255,0.5); text-transform: uppercase;
+        }
+        .letter.countdown { color: #ff8800; text-shadow: 0 0 30px rgba(255,136,0,0.5); }
+        .letter.practice-mode { color: #00ff88; text-shadow: 0 0 30px rgba(0,255,136,0.5); }
+        .stats { display: flex; justify-content: center; gap: 40px; margin-bottom: 20px; }
+        .stat { text-align: center; }
+        .stat-value { font-size: 1.8rem; font-weight: 300; color: #00d9ff; }
+        .stat-label { font-size: 0.7rem; color: #555; text-transform: uppercase; }
+        .stat.practice .stat-value { color: #00ff88; }
+        .feedback { text-align: center; height: 24px; font-size: 0.85rem; margin-bottom: 15px; }
+        .feedback.hit { color: #00ff88; }
+        .feedback.miss { color: #ff4444; }
+        .feedback.false-alarm { color: #ff8800; }
+        .feedback.correct-rejection { color: #00d9ff; }
+        .buttons { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
+        .btn-response {
+            width: 120px; height: 60px; border: none; border-radius: 12px;
+            font-size: 1rem; font-weight: 600; cursor: pointer;
+            -webkit-tap-highlight-color: transparent;
+            transition: transform 0.1s, opacity 0.2s;
+        }
+        .btn-response:active { transform: scale(0.95); }
+        .btn-response:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn-match { background: linear-gradient(135deg, #00ff88, #00cc6a); color: #000; }
+        .btn-no-match { background: linear-gradient(135deg, #ff6b6b, #ee5a5a); color: #fff; }
+        .controls { display: flex; justify-content: center; gap: 15px; }
+        .btn-control { 
+            padding: 12px 30px; border-radius: 8px; font-size: 0.9rem; cursor: pointer; border: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-start { background: #00d9ff; color: #000; font-weight: 600; }
+        .btn-stop { background: #ff4444; color: #fff; display: none; }
+        .hint { text-align: center; color: #333; font-size: 0.75rem; margin-top: 25px; }
+        .hint kbd { background: rgba(255,255,255,0.1); padding: 3px 8px; border-radius: 4px; }
+        .history { margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+        .history-label { font-size: 0.7rem; color: #444; text-transform: uppercase; margin-bottom: 8px; }
+        .history-letters { font-family: monospace; font-size: 1.1rem; color: #666; letter-spacing: 4px; text-transform: uppercase; word-wrap: break-word; }
+        .history-letters .current { color: #00d9ff; font-weight: bold; }
+        .history-letters .match-position { color: #00ff88; }
+        .practice-banner {
+            background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3);
+            padding: 8px 15px; border-radius: 8px; text-align: center;
+            color: #00ff88; font-size: 0.8rem; margin-bottom: 20px; display: none;
+        }
+        .practice-banner.visible { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Auditory N-Back</h1>
+        <p class="subtitle">Traditional Version</p>
+
+```
+    <div class="practice-banner" id="practiceBanner">
+        🎯 PRACTICE MODE — No scoring, learn the rhythm
+    </div>
+    
+    <div class="settings" id="settings">
+        <div class="setting">
+            <label>N-Back</label>
+            <select id="nBack">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+            </select>
+        </div>
+        <div class="setting">
+            <label>Interval (sec)</label>
+            <select id="interval">
+                <option value="2.5">2.5</option>
+                <option value="3" selected>3</option>
+                <option value="3.5">3.5</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+            </select>
+        </div>
+        <div class="setting">
+            <label>Practice</label>
+            <div class="toggle-container">
+                <div class="toggle" id="practiceToggle"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="display">
+        <div class="letter" id="letter">—</div>
+    </div>
+    
+    <div class="stats">
+        <div class="stat">
+            <div class="stat-value" id="trial">0</div>
+            <div class="stat-label">Trial</div>
+        </div>
+        <div class="stat" id="accuracyStat">
+            <div class="stat-value" id="accuracy">—</div>
+            <div class="stat-label">Accuracy</div>
+        </div>
+        <div class="stat">
+            <div class="stat-value" id="hits">0</div>
+            <div class="stat-label">Hits</div>
+        </div>
+    </div>
+    
+    <div class="feedback" id="feedback"></div>
+    
+    <div class="buttons">
+        <button class="btn-response btn-match" id="btnMatch" disabled>MATCH</button>
+        <button class="btn-response btn-no-match" id="btnNoMatch" disabled>NO MATCH</button>
+    </div>
+    
+    <div class="controls">
+        <button class="btn-control btn-start" id="btnStart">Start</button>
+        <button class="btn-control btn-stop" id="btnStop">Stop</button>
+    </div>
+    
+    <div class="hint">
+        <kbd>M</kbd> Match | <kbd>N</kbd> No Match | <kbd>Space</kbd> Start/Stop
+    </div>
+    
+    <div class="history">
+        <div class="history-label">Sequence</div>
+        <div class="history-letters" id="historyLetters">—</div>
+    </div>
+</div>
+
+<script>
+    // ========================================
+    // STATE
+    // ========================================
+    var running = false;
+    var trialNum = 0;
+    var sequence = [];
+    var hits = 0;
+    var misses = 0;
+    var falseAlarms = 0;
+    var correctRejections = 0;
+    var responded = false;
+    var nextTrialTimeout = null;
+    var practiceMode = false;
+    
+    var synth = window.speechSynthesis;
+    
+    // Clear consonants that sound distinct when spoken
+    var LETTERS = ['b', 'c', 'd', 'f', 'g', 'h', 'k', 'l', 'm', 'n', 'p', 'r', 's', 't', 'v', 'z'];
+
+    // ========================================
+    // GETTERS
+    // ========================================
+    function getNBack() { 
+        return parseInt(document.getElementById('nBack').value); 
+    }
+    
+    function getIntervalMs() { 
+        return parseFloat(document.getElementById('interval').value) * 1000; 
+    }
+
+    // ========================================
+    // SPEECH - FIRE AND FORGET
+    // No cancel, no callbacks, no event listeners
+    // ========================================
+    function speak(text) {
+        var utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 0.8;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        utterance.lang = 'en-US';
+        synth.speak(utterance);
+    }
+
+    // ========================================
+    // CORE LOGIC
+    // ========================================
+    function isCurrentMatch() {
+        var n = getNBack();
+        if (sequence.length <= n) return false;
+        return sequence[sequence.length - 1] === sequence[sequence.length - 1 - n];
+    }
+
+    function pickLetter() {
+        var n = getNBack();
+        if (sequence.length >= n && Math.random() < 0.3) {
+            return sequence[sequence.length - n];
+        }
+        return LETTERS[Math.floor(Math.random() * LETTERS.length)];
+    }
+
+    // ========================================
+    // UI UPDATES
+    // ========================================
+    function updateHistory() {
+        var n = getNBack();
+        var el = document.getElementById('historyLetters');
+        if (sequence.length === 0) { 
+            el.textContent = '—'; 
+            return; 
+        }
+        var html = '';
+        for (var i = 0; i < sequence.length; i++) {
+            var letter = sequence[i];
+            if (i === sequence.length - 1) {
+                html += '<span class="current">' + letter + '</span>';
+            } else if (i === sequence.length - 1 - n && sequence.length > n) {
+                html += '<span class="match-position">' + letter + '</span>';
+            } else {
+                html += letter;
+            }
+            if (i < sequence.length - 1) html += ' ';
+        }
+        el.innerHTML = html;
+    }
+
+    function showFeedback(text, cls) {
+        var el = document.getElementById('feedback');
+        el.textContent = text;
+        el.className = 'feedback ' + cls;
+    }
+    
+    function clearFeedback() {
+        var el = document.getElementById('feedback');
+        el.textContent = '';
+        el.className = 'feedback';
+    }
+
+    function updateAccuracy() {
+        var total = hits + misses + falseAlarms + correctRejections;
+        var el = document.getElementById('accuracy');
+        if (total === 0) { 
+            el.textContent = '—'; 
+            return; 
+        }
+        var acc = Math.round(((hits + correctRejections) / total) * 100);
+        el.textContent = acc + '%';
+    }
+
+    // ========================================
+    // SCORING
+    // ========================================
+    function evaluatePreviousTrial() {
+        if (practiceMode) return;
+        
+        var n = getNBack();
+        if (sequence.length > n + 1 && !responded) {
+            var prevIndex = sequence.length - 2;
+            var wasMatch = sequence[prevIndex] === sequence[prevIndex - n];
+            if (wasMatch) {
+                misses++;
+            } else {
+                correctRejections++;
+            }
+            updateAccuracy();
+        }
+    }
+
+    // ========================================
+    // TRIAL EXECUTION
+    // ========================================
+    function runTrial() {
+        if (!running) return;
+        
+        // Evaluate previous trial if no response was given
+        if (trialNum > 0) {
+            evaluatePreviousTrial();
+        }
+        
+        clearFeedback();
+        
+        trialNum++;
+        responded = false;
+        
+        var letter = pickLetter();
+        sequence.push(letter);
+        
+        document.getElementById('trial').textContent = trialNum;
+        
+        var canRespond = sequence.length > getNBack();
+        document.getElementById('btnMatch').disabled = !canRespond;
+        document.getElementById('btnNoMatch').disabled = !canRespond;
+        
+        var letterEl = document.getElementById('letter');
+        
+        // Step 1: SPEAK the letter (fire and forget)
+        speak(letter);
+        
+        // Step 2: Show visual AFTER 600ms delay
+        // This ensures audio is clearly heard BEFORE visual appears
+        setTimeout(function() {
+            if (running) {
+                letterEl.textContent = letter;
+                if (practiceMode) {
+                    letterEl.className = 'letter practice-mode';
+                } else {
+                    letterEl.className = 'letter';
+                }
+                updateHistory();
+            }
+        }, 600);
+        
+        // Step 3: Schedule next trial at exact interval
+        nextTrialTimeout = setTimeout(runTrial, getIntervalMs());
+    }
+
+    // ========================================
+    // RESPONSE HANDLING
+    // ========================================
+    function respond(isMatchResponse) {
+        if (!running) return;
+        if (responded) return;
+        if (sequence.length <= getNBack()) return;
+        
+        responded = true;
+        var wasActualMatch = isCurrentMatch();
+        
+        if (practiceMode) {
+            if (isMatchResponse && wasActualMatch) {
+                showFeedback('✓ Correct - It was a match!', 'hit');
+            } else if (isMatchResponse && !wasActualMatch) {
+                showFeedback('✗ Not a match', 'false-alarm');
+            } else if (!isMatchResponse && wasActualMatch) {
+                showFeedback('✗ It WAS a match!', 'miss');
+            } else {
+                showFeedback('✓ Correct - Not a match', 'correct-rejection');
+            }
+        } else {
+            if (isMatchResponse && wasActualMatch) {
+                hits++;
+                showFeedback('✓ Hit!', 'hit');
+            } else if (isMatchResponse && !wasActualMatch) {
+                falseAlarms++;
+                showFeedback('✗ False Alarm', 'false-alarm');
+            } else if (!isMatchResponse && wasActualMatch) {
+                misses++;
+                showFeedback('✗ Miss', 'miss');
+            } else {
+                correctRejections++;
+                showFeedback('✓ Correct Rejection', 'correct-rejection');
+            }
+            document.getElementById('hits').textContent = hits;
+            updateAccuracy();
+        }
+    }
+
+    // ========================================
+    // COUNTDOWN - PURE TIME-BASED
+    // No callbacks, no speech event dependencies
+    // ========================================
+    function startCountdown(onComplete) {
+        var letterEl = document.getElementById('letter');
+        letterEl.className = 'letter countdown';
+        
+        // T = 0ms: Show and speak "3"
+        letterEl.textContent = '3';
+        speak('3');
+        
+        // T = 1000ms: Show and speak "2"
+        setTimeout(function() {
+            letterEl.textContent = '2';
+            speak('2');
+        }, 1000);
+        
+        // T = 2000ms: Show and speak "1"
+        setTimeout(function() {
+            letterEl.textContent = '1';
+            speak('1');
+        }, 2000);
+        
+        // T = 3000ms: Show and speak "0"
+        setTimeout(function() {
+            letterEl.textContent = '0';
+            speak('0');
+        }, 3000);
+        
+        // T = 4000ms: Clear and start game
+        setTimeout(function() {
+            letterEl.textContent = '—';
+            letterEl.className = 'letter';
+            onComplete();
+        }, 4000);
+    }
+
+    // ========================================
+    // GAME CONTROL
+    // ========================================
+    function startGame() {
+        // Reset all state
+        trialNum = 0;
+        sequence = [];
+        hits = 0;
+        misses = 0;
+        falseAlarms = 0;
+        correctRejections = 0;
+        responded = false;
+        
+        // Reset UI
+        document.getElementById('letter').textContent = '—';
+        document.getElementById('letter').className = 'letter';
+        document.getElementById('trial').textContent = '0';
+        document.getElementById('accuracy').textContent = '—';
+        document.getElementById('hits').textContent = '0';
+        clearFeedback();
+        document.getElementById('historyLetters').textContent = '—';
+        
+        // Button states
+        document.getElementById('btnStart').style.display = 'none';
+        document.getElementById('btnStop').style.display = 'inline-block';
+        
+        // Lock settings
+        document.getElementById('settings').style.opacity = '0.5';
+        document.getElementById('settings').style.pointerEvents = 'none';
+        
+        // Practice mode banner
+        if (practiceMode) {
+            document.getElementById('practiceBanner').classList.add('visible');
+            document.getElementById('accuracyStat').classList.add('practice');
+        }
+        
+        // Warm up speech synthesis (iOS requirement)
+        // Must happen in response to user gesture
+        var warmup = new SpeechSynthesisUtterance('.');
+        warmup.volume = 0.01;
+        warmup.rate = 2;
+        synth.speak(warmup);
+        
+        // Mark running
+        running = true;
+        
+        // Start countdown, then begin trials
+        startCountdown(function() {
+            if (running) {
+                runTrial();
+            }
+        });
+    }
+
+    function stopGame() {
+        running = false;
+        
+        if (nextTrialTimeout) {
+            clearTimeout(nextTrialTimeout);
+            nextTrialTimeout = null;
+        }
+        
+        // Reset UI
+        document.getElementById('letter').className = 'letter';
+        document.getElementById('btnStart').style.display = 'inline-block';
+        document.getElementById('btnStop').style.display = 'none';
+        document.getElementById('settings').style.opacity = '1';
+        document.getElementById('settings').style.pointerEvents = 'auto';
+        document.getElementById('btnMatch').disabled = true;
+        document.getElementById('btnNoMatch').disabled = true;
+        document.getElementById('practiceBanner').classList.remove('visible');
+        document.getElementById('accuracyStat').classList.remove('practice');
+        
+        // Final score
+        if (!practiceMode) {
+            var total = hits + misses + falseAlarms + correctRejections;
+            if (total > 0) {
+                var finalAcc = Math.round(((hits + correctRejections) / total) * 100);
+                showFeedback('Final: ' + finalAcc + '% (' + hits + ' hits, ' + misses + ' misses)', 
+                             finalAcc >= 80 ? 'hit' : 'miss');
+            }
+        }
+    }
+
+    // ========================================
+    // PRACTICE MODE TOGGLE
+    // ========================================
+    function togglePracticeMode() {
+        practiceMode = !practiceMode;
+        var toggle = document.getElementById('practiceToggle');
+        if (practiceMode) {
+            toggle.classList.add('active');
+        } else {
+            toggle.classList.remove('active');
+        }
+    }
+
+    // ========================================
+    // EVENT LISTENERS
+    // ========================================
+    document.getElementById('btnMatch').onclick = function() { 
+        respond(true); 
+    };
+    
+    document.getElementById('btnNoMatch').onclick = function() { 
+        respond(false); 
+    };
+    
+    document.getElementById('btnStart').onclick = startGame;
+    document.getElementById('btnStop').onclick = stopGame;
+    document.getElementById('practiceToggle').onclick = togglePracticeMode;
+
+    document.onkeydown = function(e) {
+        var key = e.key.toLowerCase();
+        if (key === 'm') {
+            respond(true);
+        } else if (key === 'n') {
+            respond(false);
+        } else if (key === ' ') {
+            e.preventDefault();
+            if (running) {
+                stopGame();
+            } else {
+                startGame();
+            }
+        }
+    };
+</script>
+```
+
+</body>
+</html>
