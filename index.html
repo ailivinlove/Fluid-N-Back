@@ -1,1 +1,682 @@
-..
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Auditory N-Back Training</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            touch-action: manipulation;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: clamp(2rem, 8vw, 2.5rem);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .subtitle {
+            text-align: center;
+            margin-bottom: 30px;
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .display-area {
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 60px 40px;
+            margin-bottom: 30px;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255,255,255,0.2);
+            position: relative;
+        }
+
+        .audio-indicator {
+            font-size: 60px;
+            margin-bottom: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .audio-indicator.active {
+            opacity: 1;
+            animation: pulse 0.6s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+
+        .instruction-text {
+            font-size: 18px;
+            opacity: 0.7;
+            text-align: center;
+        }
+
+        .countdown-overlay {
+            font-size: 80px;
+            font-weight: bold;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            text-shadow: 0 0 30px rgba(255,255,255,0.5);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 18px 25px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            transition: all 0.2s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            text-transform: uppercase;
+            touch-action: manipulation;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        button:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-stop {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .settings {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 18px;
+        }
+
+        .setting-row:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            font-size: 15px;
+            font-weight: 600;
+            opacity: 0.9;
+        }
+
+        input[type="range"] {
+            width: 180px;
+            height: 6px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 3px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        input[type="number"] {
+            width: 70px;
+            padding: 8px;
+            border-radius: 5px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+        .value-display {
+            min-width: 60px;
+            text-align: right;
+            font-weight: 700;
+            font-size: 16px;
+        }
+
+        .stats {
+            background: rgba(255,255,255,0.1);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        .stat-item {
+            margin-bottom: 15px;
+        }
+
+        .stat-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 36px;
+            font-weight: 900;
+        }
+
+        .instruction {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.9;
+            backdrop-filter: blur(10px);
+        }
+
+        @media (max-width: 600px) {
+            .audio-indicator {
+                font-size: 50px;
+            }
+            
+            .setting-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            input[type="range"] {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Auditory N-Back</h1>
+        <div class="subtitle">Pure Listening Training • v2.0 DIAGNOSTIC</div>
+
+        <div class="instruction">
+            Numbers will be spoken aloud. Track matches mentally—no buttons to press.<br>
+            <strong>Best with headphones. Chrome/Edge recommended.</strong>
+        </div>
+
+        <div class="display-area">
+            <div class="countdown-overlay" id="countdownOverlay"></div>
+            <div class="audio-indicator" id="audioIndicator">🔊</div>
+            <div class="instruction-text" id="instructionText">Initializing audio...</div>
+        </div>
+
+        <div class="controls">
+            <button class="btn-start" id="startBtn" disabled>Start</button>
+            <button class="btn-stop" id="stopBtn" disabled>Stop</button>
+        </div>
+
+        <div class="settings">
+            <div class="setting-row">
+                <label>N-Back Level:</label>
+                <input type="number" id="nBackLevel" min="1" max="15" value="3">
+            </div>
+
+            <div class="setting-row">
+                <label>Interval (seconds):</label>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <input type="range" id="intervalSlider" min="2" max="20" step="0.5" value="4">
+                    <span class="value-display" id="intervalDisplay">4.0s</span>
+                </div>
+            </div>
+
+            <div class="setting-row">
+                <label>Speech Rate:</label>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <input type="range" id="speechRate" min="0.5" max="2.0" step="0.05" value="0.9">
+                    <span class="value-display" id="speechRateDisplay">0.90x</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-label">Trials Completed</div>
+                <div class="stat-value" id="trialsCount">0</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+/**
+ * AUDITORY N-BACK - BULLETPROOF INITIALIZATION v2.0
+ */
+
+console.clear(); // Clear old errors
+console.log('======================');
+console.log('AUDITORY N-BACK v2.0 DIAGNOSTIC');
+console.log('If you see this, the new version loaded successfully.');
+console.log('======================');
+
+// Seeded PRNG
+class Mulberry32 {
+    constructor(seed) {
+        this.state = seed >>> 0;
+    }
+    next() {
+        let t = this.state += 0x6D2B79F5;
+        t = Math.imul(t ^ t >>> 15, t | 1);
+        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+}
+
+class AuditoryNBack {
+    constructor() {
+        this.running = false;
+        this.currentTrial = 0;
+        this.history = [];
+        this.synth = null; // Set when Speech API ready
+        this.audioCtx = null;
+        this.rng = new Mulberry32(Date.now());
+        this.timer = null;
+        this.speechReady = false;
+        this.pollAttempts = 0;
+    }
+
+    init() {
+        // Set up UI regardless of Speech API status
+        document.getElementById('startBtn').onclick = () => this.start();
+        document.getElementById('stopBtn').onclick = () => this.stop();
+        
+        document.getElementById('intervalSlider').oninput = (e) => {
+            document.getElementById('intervalDisplay').textContent = 
+                parseFloat(e.target.value).toFixed(1) + 's';
+        };
+        
+        document.getElementById('speechRate').oninput = (e) => {
+            document.getElementById('speechRateDisplay').textContent = 
+                parseFloat(e.target.value).toFixed(2) + 'x';
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                if (!this.running) this.start();
+                else this.stop();
+            }
+        });
+
+        // Check if Speech API is ready
+        this.checkSpeechReady();
+    }
+
+    checkSpeechReady() {
+        // Add attempt counter
+        if (!this.pollAttempts) this.pollAttempts = 0;
+        this.pollAttempts++;
+        
+        console.log(`Attempt ${this.pollAttempts}: Checking Speech API...`);
+        console.log('speechSynthesis exists:', !!window.speechSynthesis);
+        if (window.speechSynthesis) {
+            console.log('speak type:', typeof window.speechSynthesis.speak);
+            console.log('cancel type:', typeof window.speechSynthesis.cancel);
+            console.log('getVoices type:', typeof window.speechSynthesis.getVoices);
+        }
+        
+        if (window.speechSynthesis && 
+            typeof window.speechSynthesis.speak === 'function' &&
+            typeof window.speechSynthesis.cancel === 'function' &&
+            typeof window.speechSynthesis.getVoices === 'function') {
+            
+            this.synth = window.speechSynthesis;
+            this.speechReady = true;
+            
+            // Load voices
+            try {
+                this.synth.getVoices();
+                this.synth.onvoiceschanged = () => {
+                    if (this.synth) this.synth.getVoices();
+                };
+            } catch (e) {
+                console.error('Voice loading error:', e);
+            }
+            
+            // Enable start button
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('instructionText').textContent = 'Press Start to begin';
+            console.log('✓ Speech API ready!');
+        } else {
+            // Not ready yet
+            if (this.pollAttempts < 50) {
+                // Keep trying for 5 seconds
+                setTimeout(() => this.checkSpeechReady(), 100);
+            } else {
+                // Give up after 5 seconds
+                console.error('Speech API failed to initialize after 5 seconds');
+                document.getElementById('instructionText').textContent = 'Speech API not available. Please use Chrome, Edge, or Safari.';
+                alert('Speech Synthesis API not available in this browser.\n\nPlease try:\n• Chrome\n• Edge\n• Safari\n\nOr refresh the page if using a compatible browser.');
+            }
+        }
+    }
+
+    initAudioContext() {
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+    }
+
+    playPrimer() {
+        return new Promise((resolve) => {
+            if (!this.audioCtx) {
+                resolve();
+                return;
+            }
+
+            const oscillator = this.audioCtx.createOscillator();
+            const gainNode = this.audioCtx.createGain();
+
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(110, this.audioCtx.currentTime);
+
+            gainNode.gain.setValueAtTime(0.08, this.audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, this.audioCtx.currentTime + 0.12);
+
+            oscillator.connect(gainNode);
+            gainNode.connect(this.audioCtx.destination);
+
+            oscillator.start(this.audioCtx.currentTime);
+            oscillator.stop(this.audioCtx.currentTime + 0.12);
+
+            setTimeout(resolve, 120);
+        });
+    }
+
+    speakCountdown(text) {
+        return new Promise((resolve) => {
+            if (!this.synth || !this.speechReady) {
+                resolve();
+                return;
+            }
+            
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = 0.9;
+            utterance.pitch = 1.0;
+
+            let resolved = false;
+            const finish = () => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve();
+                }
+            };
+
+            utterance.onend = finish;
+            utterance.onerror = finish;
+            setTimeout(finish, 2000);
+
+            this.synth.speak(utterance);
+        });
+    }
+
+    speak(text) {
+        return new Promise((resolve) => {
+            if (!this.synth || !this.speechReady) {
+                console.error('Speech not ready');
+                resolve();
+                return;
+            }
+            
+            try {
+                this.synth.cancel();
+            } catch (e) {
+                console.error('Cancel error:', e);
+            }
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.rate = parseFloat(document.getElementById('speechRate').value);
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+
+            try {
+                const voices = this.synth.getVoices();
+                const preferredVoice = voices.find(v => 
+                    v.lang.startsWith('en') && !v.name.includes('Google')
+                ) || voices[0];
+                
+                if (preferredVoice) {
+                    utterance.voice = preferredVoice;
+                }
+            } catch (e) {
+                console.error('Voice selection error:', e);
+            }
+
+            let resolved = false;
+            const finish = () => {
+                if (!resolved) {
+                    resolved = true;
+                    document.getElementById('audioIndicator').classList.remove('active');
+                    resolve();
+                }
+            };
+
+            utterance.onstart = () => {
+                document.getElementById('audioIndicator').classList.add('active');
+            };
+
+            utterance.onend = finish;
+            utterance.onerror = finish;
+            setTimeout(finish, 5000);
+
+            this.synth.speak(utterance);
+        });
+    }
+
+    async runInitialCountdown() {
+        const overlay = document.getElementById('countdownOverlay');
+        overlay.style.display = 'block';
+
+        this.initAudioContext();
+        await this.playPrimer();
+        await new Promise(r => setTimeout(r, 80));
+
+        if (!this.running) { overlay.style.display = 'none'; return; }
+        overlay.textContent = '3';
+        await this.speakCountdown('3');
+        await new Promise(r => setTimeout(r, 600));
+
+        if (!this.running) { overlay.style.display = 'none'; return; }
+        overlay.textContent = '2';
+        await this.speakCountdown('2');
+        await new Promise(r => setTimeout(r, 600));
+
+        if (!this.running) { overlay.style.display = 'none'; return; }
+        overlay.textContent = '1';
+        await this.speakCountdown('1');
+        await new Promise(r => setTimeout(r, 600));
+
+        if (!this.running) { overlay.style.display = 'none'; return; }
+        await new Promise(r => setTimeout(r, 800));
+
+        overlay.style.display = 'none';
+    }
+
+    generateDigit() {
+        const n = parseInt(document.getElementById('nBackLevel').value);
+        
+        if (this.history.length < n) {
+            let digit;
+            do {
+                digit = Math.floor(this.rng.next() * 9) + 1;
+            } while (this.history.length > 0 && digit === this.history[this.history.length - 1]);
+            return digit;
+        }
+
+        const shouldMatch = this.rng.next() < 0.58;
+        
+        if (shouldMatch) {
+            return this.history[this.history.length - n];
+        } else {
+            const target = this.history[this.history.length - n];
+            const previous = this.history[this.history.length - 1];
+            
+            const candidates = [];
+            for (let i = 1; i <= 9; i++) {
+                if (i !== target && i !== previous) {
+                    candidates.push(i);
+                }
+            }
+            
+            return candidates[Math.floor(this.rng.next() * candidates.length)];
+        }
+    }
+
+    async start() {
+        if (!this.speechReady) {
+            alert('Speech system not ready. Please wait a moment and try again.');
+            return;
+        }
+
+        this.running = true;
+        this.currentTrial = 0;
+        this.history = [];
+
+        document.getElementById('startBtn').disabled = true;
+        document.getElementById('stopBtn').disabled = false;
+        document.getElementById('nBackLevel').disabled = true;
+        document.getElementById('intervalSlider').disabled = true;
+        document.getElementById('speechRate').disabled = true;
+        document.getElementById('instructionText').textContent = 'Calibrating audio...';
+
+        await this.runInitialCountdown();
+
+        if (this.running) {
+            document.getElementById('instructionText').textContent = 'Listen...';
+            this.pulse();
+        }
+    }
+
+    stop() {
+        this.running = false;
+        clearTimeout(this.timer);
+        
+        if (this.synth && this.speechReady) {
+            try {
+                this.synth.cancel();
+            } catch (e) {
+                console.error('Stop error:', e);
+            }
+        }
+
+        if (this.audioCtx && this.audioCtx.state !== 'closed') {
+            this.audioCtx.close().catch(() => {});
+            this.audioCtx = null;
+        }
+
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        document.getElementById('nBackLevel').disabled = false;
+        document.getElementById('intervalSlider').disabled = false;
+        document.getElementById('speechRate').disabled = false;
+        document.getElementById('instructionText').textContent = 'Press Start to begin';
+        document.getElementById('audioIndicator').classList.remove('active');
+        document.getElementById('countdownOverlay').style.display = 'none';
+    }
+
+    async pulse() {
+        if (!this.running) return;
+
+        this.currentTrial++;
+        
+        const digit = this.generateDigit();
+        this.history.push(digit);
+
+        await this.playPrimer();
+        if (!this.running) return;
+
+        await this.speak(digit.toString());
+        if (!this.running) return;
+
+        document.getElementById('trialsCount').textContent = this.currentTrial;
+
+        const interval = parseFloat(document.getElementById('intervalSlider').value) * 1000;
+        this.timer = setTimeout(() => this.pulse(), interval);
+    }
+}
+
+// Initialize immediately
+const engine = new AuditoryNBack();
+
+// Always call init (sets up UI)
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => engine.init());
+} else {
+    engine.init();
+}
+</script>
+</body>
+</html>
